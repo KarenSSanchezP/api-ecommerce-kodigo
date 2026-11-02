@@ -25,7 +25,16 @@ class StripeCheckoutGateway
             'quantity' => $item->quantity,
         ])->all();
 
-        $baseUrl = rtrim(config('app.url'), '/');
+        // Regresa a la tienda; el resultado mostrado se obtiene de la orden real.
+        // Sin FRONTEND_URL se conserva el retorno original de la API Laravel.
+        $baseUrl = rtrim((string) config('app.url'), '/');
+        $frontendUrl = rtrim((string) config('services.stripe.frontend_url', ''), '/');
+        $successUrl = $frontendUrl !== ''
+            ? $frontendUrl.'/pedidos/'.$order->id.'?stripe=success'
+            : $baseUrl.'/api/v1/checkout/success?session_id={CHECKOUT_SESSION_ID}';
+        $cancelUrl = $frontendUrl !== ''
+            ? $frontendUrl.'/pedidos/'.$order->id.'?stripe=cancel'
+            : $baseUrl.'/api/v1/checkout/cancel';
 
         $session = $client->checkout->sessions->create([
             'mode' => 'payment',
@@ -36,8 +45,8 @@ class StripeCheckoutGateway
             'payment_intent_data' => [
                 'metadata' => ['order_id' => (string) $order->id],
             ],
-            'success_url' => $baseUrl.'/api/v1/checkout/success?session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => $baseUrl.'/api/v1/checkout/cancel',
+            'success_url' => $successUrl,
+            'cancel_url' => $cancelUrl,
             // Una hora para completar el pago. Hito 9: liberar stock en checkout.session.expired.
             'expires_at' => time() + 3600,
         ], [
